@@ -1,0 +1,1343 @@
+options {
+    STATIC = false;
+    DEBUG_LOOKAHEAD = true;
+}
+PARSER_BEGIN(prataLang)
+package compilador.regras;
+import java.io.*;
+import java.util.HashMap;
+import java.util.Objects;
+import java.util.Stack;
+
+import compilador.telas.CompiladorGui;
+
+import javax.swing.table.DefaultTableModel;
+
+public class prataLang {
+
+  final static String Version = "PrataLang Compiler - Version 1.0 - 2024";
+  boolean Menosshort = false;
+  int countParseError = 0;
+  String error_s = "";
+
+  Integer pointer = 1;
+  String context = "";
+
+  int VT  = 0, VP = 0;
+  int tipo = 0 ;
+
+  Stack pilha = new Stack<Integer>();
+  HashMap instructionArea = new HashMap<Integer, InstructionArea>();
+  HashMap simbolsTable = new HashMap<String, Auxst>();
+
+
+    // Metodo que é chamado no CompiladorGui para compilar pelo botão e pelo menu
+  public static void Compile(String file, prataLang parser, CompiladorGui gui) throws ParseException {
+      boolean debug = false;
+      String filename = file; // nome do arquivo a ser analizado
+      boolean ms = false;
+
+      gui.jTextArea1.append(Version + "\n");
+
+      gui.jTextArea1.append("Readig from file " + filename + " . . .  \n");
+
+      try{
+            parser = new prataLang(new java.io.FileInputStream(filename));
+      } catch (java.io.FileNotFoundException e ) {
+            gui.jTextArea1.append("File "+filename+ " NOT FOUND \n");
+            return;
+      }
+
+      if(!debug) parser.disable_tracing();
+
+
+      parser.Menosshort = ms;
+
+      try{
+          parser.lex(gui);
+          parser.ReInit(new java.io.FileInputStream(filename));
+          if(parser.token_source.foundLexError() == 0){
+            parser.program(gui);
+          }
+      }
+      catch (ParseException e){
+          parser.countParseError += 1;
+      } catch (FileNotFoundException e) {
+          throw new RuntimeException(e);
+      }
+      finally{
+          if (parser.token_source.foundLexError() != 0){
+              gui.jTextArea1.append(
+                  parser.token_source.foundLexError() + " Lexic Error Found \n"
+              );
+
+          }
+          else if (parser.countParseError != 0){
+              gui.jTextArea1.append(parser.error_s + "\n");
+              gui.jTextArea1.append(
+                  parser.countParseError + " Syntactic Errors found"
+              );
+          }
+          else gui.jTextArea1.append(" Successfully Analized Program \n");
+      }
+
+
+  }
+
+  //metodo auxiliar
+  static public String im(int x) {
+    int  k;
+    String s;
+    s = tokenImage[x];
+    k = s.lastIndexOf("\"");
+    try{
+      s=s.substring(1,k);
+    }
+    catch (StringIndexOutOfBoundsException e ){ }
+    return s;
+  }
+}
+
+PARSER_END(prataLang)
+
+TOKEN_MGR_DECLS : {
+    String error = "";
+    int eherro;
+    int countLexError = 0;
+
+    public int foundLexError(){
+        return countLexError;
+    }
+}
+
+SKIP : {
+    " " | "\t" | "\n" | "\r"| "\f"  // Ignora espaços em branco e quebras de linha
+}
+
+// Multiline comment
+SKIP : {
+    "/*" : multilinecomment
+}
+
+<multilinecomment> SKIP : {
+    "*/" : DEFAULT   // Sai do modo de comentário ao encontrar */
+    | <~[]>
+}
+
+// sigle line comment
+SKIP : {
+    "//" : singlelinecomment
+}
+
+<singlelinecomment> SKIP: {
+    <["\n","\r"]>:DEFAULT
+    | <~[]>
+}
+
+// PALAVRAS RESERVADAS
+TOKEN : {
+      < MAKE : ("m" | "M") ("a" | "A") ("k" | "K") ("e" | "E") >{
+      eherro = 0;
+      }
+    | < END  : ("e" | "E") ("n" | "N") ("d" | "D") >{
+    eherro = 0;
+    }
+    | < CONST  : ("c" | "C") ("o" | "O") ("n" | "N") ("s" | "S") ("t" | "T") >{
+    eherro = 0;
+    }
+    | < INT  : ("i" | "I") ("n" | "N") ("t" | "T") >{
+    eherro = 0;
+    }
+    | < REAL : ("r" | "R") ("e" | "E") ("a" | "A") ("l" | "L") >{
+    eherro = 0;
+    }
+    | < CHAR : ("c" | "C") ("h" | "H") ("a" | "A") ("r" | "R") >{
+    eherro = 0;
+    }
+    | < BOOL : ("b" | "B") ("o" | "O") ("o" | "O") ("l" | "L") >{
+    eherro = 0;
+    }
+    | < VAR : ("v" | "V") ("a" | "A") ("r" | "R") >{
+    eherro = 0;
+    }
+    | < GET : ("g" | "G") ("e" | "E") ("t" | "T") >{
+    eherro = 0;
+    }
+    | < PUT : ("p" | "P") ("u" | "U") ("t" | "T") >{
+    eherro = 0;
+    }
+    | < IF : ("i" | "I") ("f" | "F") >{
+    eherro = 0;
+    }
+    | < THEN : ("t" | "T") ("h" | "H") ("e" | "E") ("n" | "N") >{
+    eherro = 0;
+    }
+    | < ELSE : ("e" | "E") ("l" | "L") ("s" | "S") ("e" | "E") >{
+    eherro = 0;
+    }
+    | < WHILE : ("w" | "W") ("h" | "H") ("i" | "I") ("l" | "L") ("e" | "E") >{
+    eherro = 0;
+    }
+    | < DO : ("d" | "D") ("o" | "O") >{
+    eherro = 0;
+    }
+}
+
+// OPERADORES LOGICOS
+TOKEN :
+{
+       < NOT : "!" >{
+       eherro = 0;
+       }
+     | < OR : "|" >{
+     eherro = 0;
+     }
+     | < END_LOGIC : "&" >{
+     eherro = 0;
+     }
+}
+
+// OPERADORES RELACIONAIS
+TOKEN :
+{
+       < ASSIGN : "->" >{
+       eherro = 0;
+       }
+     | < EQUAL : "=" >{
+     eherro = 0;
+     }
+     | < DIFFERENT : "<>" >{
+     eherro = 0;
+     }
+     | < MINOR : "<" >{
+     eherro = 0;
+     }
+     | < MINOR_EQUAL : "<=" >{
+     eherro = 0;
+     }
+     | < BIGGER : ">" >{
+     eherro = 0;
+     }
+     | < BIGGER_EQUAL : ">=" >{
+     eherro = 0;
+     }
+}
+
+// OPERADORES ARITMETRIC
+TOKEN :
+{
+       < PLUS : "+" >{
+       eherro = 0;
+       }
+     | < MINUS : "-" >{
+     eherro = 0;
+     }
+     | < MULTIPLICATION : "*" >{
+     eherro = 0;
+     }
+     | < DIVISION : "/" >{
+     eherro = 0;
+     }
+     | < POTENCY : "**" >{
+     eherro = 0;
+     }
+     | < ENTIRE_DIVISION : "%" >{
+     eherro = 0;
+     }
+     | < DIVISION_REST : "%%" >{
+     eherro = 0;
+     }
+}
+
+// CONSTANTES
+TOKEN :
+{
+       < int_constant  : (["0"-"9"]) (["0"-"9"])? (["0"-"9"])? >{
+       eherro = 0;
+       }
+      | < char_constant : ("\"" (~["\n", "\r", "\f"])+ "\"" | "'" (~["\n", "\r", "\f"])+ "'") >{
+      eherro = 0;
+      }
+      | < float_constant : (["0"-"9"]) (["0"-"9"])? (["0"-"9"])? (["0"-"9"])? "." (["0"-"9"]) (["0"-"9"])? >{
+      eherro = 0;
+      }
+     | < TRUE : ("t" | "T") ("r" | "R") ("u" | "U") ("e" | "E") >{
+     eherro = 0;
+     }
+     | < FALSE   : ("f" | "F") ("a" | "A") ("l" | "L") ("s" | "S") ("e" | "E") >{
+     eherro = 0;
+     }
+     | < null_constant   : ("n" | "N") ("u" | "U") ("l" | "L") ("l" | "L") >{
+     eherro = 0;
+     }
+}
+
+// IDENTIFICADORES
+TOKEN :
+{
+    < IDENT  : ( ["a"-"z", "A"-"Z"]  | "_" ) ( ["a"-"z", "A"-"Z"] |"_"| ["0" - "9"] (["a"-"z", "A"-"Z"] | "_") )* (["a"-"z", "A"-"Z"] | "_")* >{
+    eherro = 0;
+    }
+}
+
+// SIMBULOS ESPECIAIS
+TOKEN :
+{
+    < DOT : "." >{
+    eherro = 0;
+    }
+    |
+    < COMMA : "," >{
+    eherro = 0;
+    }
+    |
+    < SEMICOLON : ";" >{
+    eherro = 0;
+    }
+    |
+    < TWO_POINTS : ":" >{
+    eherro = 0;
+    }
+    |
+    < LPAREN : "(" >{
+     eherro = 0;
+     }
+    |
+    < RPAREN : ")" >{
+    eherro = 0;
+    }
+}
+
+// Token para erros léxicos
+TOKEN : {
+
+    < INVALID_LEXICAL : (~["a"-"z",
+        "A"-"Z",
+        "0"-"9",
+        "\n", "\r",
+        "\t", "\f",
+        "\"",
+        "'",
+        " ",
+        ":",
+        "(", ")",
+        ",",
+        ".",
+        ";",
+        "=",
+        "<",
+        ">",
+        "+",
+        "-",
+        "*",
+        "/",
+        "&",
+        "!",
+        "|",
+        "%",
+        "^",
+        "_"]) + >
+            {
+                error = ("Line " + input_stream.getBeginLine() + " Column " + input_stream.getBeginColumn() + " - Invalid Character Found: " + "\"" + image + "\"" + " Code: ");;
+                countLexError++;
+                eherro = 1;
+            }
+   |
+        <INVALID_CONST_CHAR_WITH_LINEBREAK:
+        (("\"" (~["\"", "\n", "\r", "\f"])+ ["\"", "\n", "\r", "\f"] (~["\"", "\n", "\r", "\f"])+ "\"" | "'" (~["\"", "\n", "\r", "\f"])+ ["\"", "\n", "\r", "\f"] (~["\"", "\n", "\r", "\f"])+ "'"))>
+        {
+            error = ("Line " + input_stream.getBeginLine() + " Column " + input_stream.getBeginColumn() + " - Invalid Char With LineBreak: " + "\"" + image + "\"" + " Code: ");;
+            countLexError++;
+            eherro = 1;
+        }
+  |
+        <INVALID_CONST_CHAR_END:
+        ( ("\"" (~ ["\"", "\n", "\r"])? "'") | ("'" (~ ["\"", "\n", "\r"])? "\""))>
+        {
+            error = ("Line " + input_stream.getBeginLine() + " Column " + input_stream.getBeginColumn() + " - Invalid String/Character Ending: " + "\"" + image + "\"" + " Code: ");;
+            countLexError++;
+            eherro = 1;
+        }
+  |
+        <INVALID_CONST_FLOAT_SIZE:
+        (((["0"-"9"]) (["0"-"9"]) (["0"-"9"]) (["0"-"9"]) (["0"-"9"])+ "." (["0"-"9"]) (["0"-"9"])?) | ((["0"-"9"]) (["0"-"9"]) (["0"-"9"]) (["0"-"9"]) (["0"-"9"])+ "." (["0"-"9"]) (["0"-"9"]) (["0"-"9"])+) | ((["0"-"9"]) (["0"-"9"])? (["0"-"9"])? (["0"-"9"])? "." (["0"-"9"]) (["0"-"9"]) (["0"-"9"])+))>
+        {
+            error = ("Line " + input_stream.getBeginLine() + " Column " + input_stream.getBeginColumn() + " - Invalid Float Size: " + "\"" + image + "\"" + " Code: ");;
+            countLexError++;
+            eherro = 1;
+        }
+  |
+        <INVALID_CONST_INT_SIZE:
+        (["0"-"9"]) (["0"-"9"]) (["0"-"9"]) (["0"-"9"])+>
+        {
+            error = ("Line " + input_stream.getBeginLine() + " Column " + input_stream.getBeginColumn() + " - Invalid Int Size: " + "\"" + image + "\"" + " Code: ");;
+            countLexError++;
+            eherro = 1;
+        }
+|
+       <INVALID_COMMENT_CLOSE:
+       "*/" >
+       {
+            error = ("Line " + input_stream.getBeginLine() + " Column " + input_stream.getBeginColumn() + " - Invalid Closing of a Comment: " + "\"" + image + "\"" + " Code: ");;
+            countLexError++;
+            eherro = 1;
+       }
+|
+       <INVALID_IDENTIFIER:
+       (((["A"-"Z", "a"-"z"] | "_") (["A"-"Z", "a"-"z"] | "_" | ["0" - "9"] (["A"-"Z", "a"-"z"] ))* ["0" - "9"]) | ((["A"-"Z", "a"-"z"] | "_") (["A"-"Z", "a"-"z"] | "_" | ["0" - "9"] ["0" - "9"] (["0"-"9"])*)* (["A"-"Z", "a"-"z"] | "_") ) | (( ["0" - "9"] ) ( ["a"-"z", "A"-"Z"]  |"_"| ["0" - "9"] ( ["a"-"z", "A"-"Z"] | "_" ) )* (["a"-"z", "A"-"Z"] | "_")) ) >
+       {
+           error = ("Line " + input_stream.getBeginLine() + " Column " + input_stream.getBeginColumn() + " - Invalid Identifier: " + "\"" + image + "\"" + " Code: ");;
+           countLexError++;
+           eherro = 1;
+       }
+}
+
+JAVACODE void lex(CompiladorGui gui){
+      Token t;
+      do
+      {
+          t = getNextToken();
+          Token st = t;
+          while ( st.specialToken != null)
+          st = st.specialToken;
+          do {
+              if(token_source.eherro != 0){
+                  if ( !Menosshort ) {
+                      gui.jTextArea1.append(token_source.error + st.kind + " " + im(st.kind) + "\n");
+                      token_source.error = "";
+                  }
+                  else {
+                      System.out.println(token_source.error + st.kind + " " + im(st.kind) + "\n");
+                      token_source.error = "";
+                  }
+              }
+              st = st.next;
+          } while (st != t.next);
+      } while (t.kind != prataLangConstants.EOF);
+      if(token_source.curLexState == 1){
+          gui.jTextArea1.append(" Error to end Block Comment \n");
+          token_source.countLexError++;
+      }
+}
+
+void program(CompiladorGui gui) :
+{
+}
+{
+    try{
+        <MAKE>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Make" + "\n");
+        countParseError += 1;
+    }
+    [<IDENT> two(gui)]
+     [declaracao(gui)] [listacomandos(gui)]
+     try{
+       <END>
+     }catch(Exception e){
+       gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: End" + "\n");
+       countParseError += 1;
+     }
+     try{
+       <DOT>
+     }catch(Exception e){
+       gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Dot" + "\n");
+       countParseError += 1;
+     }
+     one(gui)
+}
+
+
+void declaracao(CompiladorGui gui) :
+{
+}
+{
+    declaracaoV(gui) [declaracaoC(gui)] | declaracaoC(gui) [declaracaoV(gui)]
+}
+
+void declaracaoC(CompiladorGui gui) :
+{
+}
+{
+    try{
+        <CONST>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Constant" + "\n");
+        countParseError += 1;
+    }
+    three(gui)
+    listadeconstante(gui)
+    try{
+        <END>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: End" + "\n");
+        countParseError += 1;
+    }
+    try{
+        <SEMICOLON>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Semicolon" + "\n");
+        countParseError += 1;
+    }
+}
+
+void listadeconstante(CompiladorGui gui) :
+{
+}
+{
+    tipoC(gui)
+    try{
+        <TWO_POINTS>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Two Points (:)" + "\n");
+        countParseError += 1;
+    }
+    listadeident(gui)
+    four(gui)
+    try{
+        <EQUAL>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Equals (=)" + "\n");
+        countParseError += 1;
+    }
+    valor(gui)
+    five(gui)
+    try{
+        <DOT>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Dot" + "\n");
+        countParseError += 1;
+    }
+    _listadeconstante(gui)
+}
+
+void _listadeconstante(CompiladorGui gui) :
+{
+}
+{
+    [listadeconstante(gui)]
+}
+
+void tipoC(CompiladorGui gui) :
+{
+}
+{
+    try{
+        <INT> seven(gui) | <REAL> eight(gui) | <CHAR> nine(gui)
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Int, Real or Char" + "\n");
+        countParseError += 1;
+    }
+
+}
+
+void listadeident(CompiladorGui gui) :
+{
+}
+{
+    try{
+        <IDENT> eleven(gui) _listadeident(gui)
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Identifier" + "\n");
+        countParseError += 1;
+    }
+
+}
+
+void _listadeident(CompiladorGui gui) :
+{
+}
+{
+    [<COMMA> listadeident(gui)]
+}
+
+void valor(CompiladorGui gui) :
+{
+}
+{
+    try{
+        <int_constant> | <float_constant> | <char_constant>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Values" + "\n");
+        countParseError += 1;
+    }
+}
+
+void declaracaoV(CompiladorGui gui) :
+{
+}
+{
+    try{
+       <VAR>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Var" + "\n");
+        countParseError += 1;
+    }
+    six(gui)
+    listadevariavel(gui)
+    try{
+        <END>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: End" + "\n");
+        countParseError += 1;
+    }
+    try{
+        <SEMICOLON>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Semicolon" + "\n");
+        countParseError += 1;
+    }
+}
+
+void listadevariavel(CompiladorGui gui) :
+{
+}
+{
+    tipoV(gui)
+    try{
+        <TWO_POINTS>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Two Points (:)" + "\n");
+        countParseError += 1;
+    }
+    listadeident(gui)
+    four(gui)
+    try{
+        <DOT>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Dot" + "\n");
+        countParseError += 1;
+    }
+    _listadevariavel(gui)
+}
+
+void _listadevariavel(CompiladorGui gui) :
+{
+}
+{
+    [listadevariavel(gui)]
+}
+
+void tipoV(CompiladorGui gui) :
+{
+}
+{
+    try{
+        <INT> seven(gui) | <REAL> eight(gui) | <CHAR> nine(gui) | <BOOL> ten(gui)
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Int, Real, Char or Bool" + "\n");
+        countParseError += 1;
+    }
+}
+
+void comandoatribuaicao(CompiladorGui gui) :
+{
+}
+{
+    expressao(gui)
+    try{
+        <ASSIGN>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Assign (->)" + "\n");
+        countParseError += 1;
+    }
+    try{
+        <IDENT>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Identifier" + "\n");
+        countParseError += 1;
+    }
+    twelve(gui)
+    try{
+        <DOT>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Dot" + "\n");
+        countParseError += 1;
+    }
+}
+
+void comandoentrada(CompiladorGui gui) :
+{
+}
+{
+    try{
+        <GET>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Get" + "\n");
+        countParseError += 1;
+    }
+    thirteen(gui)
+    try{
+        <LPAREN>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Left Parenthesis" + "\n");
+        countParseError += 1;
+    }
+    listadeident(gui)
+    try{
+        <RPAREN>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Right Parenthesis" + "\n");
+        countParseError += 1;
+    }
+    try{
+        <DOT>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Dot" + "\n");
+        countParseError += 1;
+    }
+}
+
+void comandosaida(CompiladorGui gui) :
+{
+}
+{
+    try{
+        <PUT>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Put" + "\n");
+        countParseError += 1;
+    }
+    try{
+        <LPAREN>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Left Parenthesis" + "\n");
+        countParseError += 1;
+    }
+    listadeidenteconst(gui)
+    try{
+        <RPAREN>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Right Parenthesis" + "\n");
+        countParseError += 1;
+    }
+    try{
+        <DOT>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Dot" + "\n");
+        countParseError += 1;
+    }
+}
+
+void listadeidenteconst(CompiladorGui gui) :
+{
+}
+{
+    try{
+        lic(gui) fourteen(gui) (<COMMA> lic(gui))*
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Comma" + "\n");
+        countParseError += 1;
+    }
+
+}
+
+void lic(CompiladorGui gui) :
+{
+}
+{
+    try{
+        <IDENT> fifteen(gui) | <int_constant> sixteen(gui) | <float_constant> seventeen(gui) | <char_constant> eighteen(gui) | <TRUE> nineteen(gui) | <FALSE> twenty(gui)
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Identifier or Const Type" + "\n");
+        countParseError += 1;
+    }
+
+}
+
+void comandoselecao(CompiladorGui gui) :
+{
+}
+{
+    try{
+        <IF>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: If" + "\n");
+        countParseError += 1;
+    }
+     expressao(gui)
+     twentyone(gui)
+    try{
+        <THEN>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Then" + "\n");
+        countParseError += 1;
+    }
+    listacomandos(gui)
+    [<ELSE> twentythree(gui) listacomandos(gui)]
+    try{
+        <END>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: End" + "\n");
+        countParseError += 1;
+    }
+    twentytwo(gui)
+    try{
+        <DOT>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Dot" + "\n");
+        countParseError += 1;
+    }
+}
+
+void comandorepeticao(CompiladorGui gui) :
+{
+}
+{
+    try{
+        <WHILE>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: While" + "\n");
+        countParseError += 1;
+    }
+    twentyfour(gui)
+    expressao(gui)
+    twentyfive(gui)
+    try{
+        <DO>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Do" + "\n");
+        countParseError += 1;
+    }
+    listacomandos(gui)
+    try{
+        <END>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: End" + "\n");
+        countParseError += 1;
+    }
+    twentysix(gui)
+    try{
+        <DOT>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Dot" + "\n");
+        countParseError += 1;
+    }
+}
+
+void listacomandos(CompiladorGui gui) :
+{
+}
+{
+    comandos(gui) [listacomandos(gui)]
+}
+
+void comandos(CompiladorGui gui) :
+{
+}
+{
+    comandoatribuaicao(gui) | comandoentrada(gui) | comandorepeticao(gui) | comandosaida(gui) | comandoselecao(gui)
+}
+
+void elemento(CompiladorGui gui) :
+{
+}
+{
+    try{
+        <IDENT> fifteen(gui) | <int_constant> sixteen(gui) | <float_constant> seventeen(gui) | <char_constant> eighteen(gui) | <TRUE> nineteen(gui) | <FALSE> twenty(gui) | <NOT> <LPAREN> expressao(gui) <RPAREN> fourtytwo(gui) | <LPAREN> expressao(gui) <RPAREN>
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Element" + "\n");
+        countParseError += 1;
+    }
+
+}
+
+void expressao(CompiladorGui gui) :
+{
+}
+{
+    expressaoaroulo(gui) [_expressao(gui)]
+}
+
+void _expressao(CompiladorGui gui) :
+{
+}
+{
+    try{
+        <EQUAL> expressaoaroulo(gui) twentyseven(gui) | <DIFFERENT> expressaoaroulo(gui) twentyeight(gui) | <BIGGER> expressaoaroulo(gui) thirty(gui) | <MINOR> expressaoaroulo(gui) twentynine(gui) | <BIGGER_EQUAL> expressaoaroulo(gui) thirtytwo(gui) | <MINOR_EQUAL> expressaoaroulo(gui) thirtyone(gui)
+    }catch(Exception e){
+        gui.jTextArea1.append("Line: " + token_source.input_stream.getBeginLine() + " Column: " + (token_source.input_stream.getBeginColumn() - 1) + " Expected: Arithmetic or Logical operators" + "\n");
+        countParseError += 1;
+    }
+
+}
+
+void expressaoaroulo(CompiladorGui gui) :
+{
+}
+{
+    termo2(gui) [menorP(gui)]
+}
+
+void menorP(CompiladorGui gui) :
+{
+}
+{
+    <PLUS> termo2(gui) thirtythree(gui) [menorP(gui)] | <MINUS> termo2(gui) thirtyfour(gui) [menorP(gui)] | <OR> termo2(gui) thirtyfive(gui) [menorP(gui)]
+}
+
+void termo2(CompiladorGui gui) :
+{
+}
+{
+    termo1(gui) [mediaP(gui)]
+}
+
+void mediaP(CompiladorGui gui) :
+{
+}
+{
+    <MULTIPLICATION> termo1(gui) thirtysix(gui) [mediaP(gui)] | <DIVISION> termo1(gui) thirtyseven(gui) [mediaP(gui)] | <ENTIRE_DIVISION> termo1(gui) thirtyeight(gui) [mediaP(gui)] | <DIVISION_REST> termo1(gui) thirtynine(gui) [mediaP(gui)] | <END_LOGIC> termo1(gui) fourty(gui) [mediaP(gui)]
+}
+
+void termo1(CompiladorGui gui) :
+{
+}
+{
+    elemento(gui) [maiorP(gui)]
+}
+
+void maiorP(CompiladorGui gui) :
+{
+}
+{
+    <POTENCY> fourtyone(gui) termo1(gui)
+}
+
+private void one (CompiladorGui gui):  {
+    InstructionArea instruction = new InstructionArea("STP", "0");
+    instructionArea.put(pointer, instruction);
+    String columns[] = {"Number", "Code", "Parameter"};
+    int size = instructionArea.size();
+    String Data[][] = new String[size][3];
+    InstructionArea in;
+    for (Integer i = 1; i <= instructionArea.size(); i++){
+      int j = i - 1;
+      in = (InstructionArea) instructionArea.get(i);
+      Data[j][0] = String.valueOf(i);
+      Data[j][1] = in.getInstruction();
+      Data[j][2] = String.valueOf(in.getParameter());
+    }
+    DefaultTableModel model = new DefaultTableModel(Data, columns);
+    gui.tabela.jTable1.setModel(model);
+  }
+  {
+    <EOF>
+  }
+
+private void two (CompiladorGui gui): {
+    Auxst auxst = new Auxst(0); //category e atributo
+    simbolsTable.put(token, auxst);
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void three (CompiladorGui gui): {
+    context = "const";
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void four (CompiladorGui gui): {
+    if( tipo == 1 || tipo == 5 ) {
+      InstructionArea instruction = new InstructionArea( "ALI", String.valueOf(VP));
+      ALI();
+      instructionArea.put(pointer, instruction);
+      pointer++;
+    }else if( tipo == 2 || tipo == 6 ) {
+      InstructionArea instruction = new InstructionArea("ALR", String.valueOf(VP));
+      instructionArea.put(pointer, instruction);
+      pointer++;
+    }else if( tipo == 3 || tipo == 7 ) {
+      InstructionArea instruction = new InstructionArea( "ALS", String.valueOf(VP));
+      instructionArea.put(pointer, instruction);
+      pointer++;
+    }else if( tipo == 4 ) {
+      InstructionArea instruction = new InstructionArea( "ALB", String.valueOf(VP));
+      instructionArea.put(pointer, instruction);
+      pointer++;
+    }if (tipo == 1 ||tipo == 2 ||tipo == 3 ||tipo == 4 ){
+      VP = 1;
+    }
+
+
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void five (CompiladorGui gui): {
+    switch (tipo){
+      case 5:
+        InstructionArea instruction = new InstructionArea( "LDI", token.image);
+        instructionArea.put(pointer, instruction);
+        pointer++;
+        break;
+      case 6:
+        InstructionArea instruction1 = new InstructionArea( "LDR", token.image);
+        instructionArea.put(pointer, instruction1);
+        pointer++;
+        break;
+      case 7:
+        InstructionArea instruction2 = new InstructionArea("LDS", token.image);
+        instructionArea.put(pointer, instruction2);
+        pointer++;
+        break;
+    }
+    InstructionArea instruction3 = new InstructionArea( "STC", String.valueOf(VP));
+    instructionArea.put(pointer, instruction3);
+    pointer++;
+    VP = 1;
+
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void six (CompiladorGui gui): {
+    context = "var";
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void seven (CompiladorGui gui): {
+    if (context == "var"){
+      tipo = 1;
+    }else {
+      tipo = 5;
+    }
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void eight (CompiladorGui gui): {
+    if (context == "var"){
+      tipo = 2;
+    }else {
+      tipo = 6;
+    }
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void nine (CompiladorGui gui): {
+    if (context == "var"){
+      tipo = 3;
+    }else {
+      tipo = 7;
+    }
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void ten (CompiladorGui gui):{
+      tipo = 4;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void eleven (CompiladorGui gui): {
+    if ( context == "const" || context == "var" ) {
+      if ( simbolsTable.containsKey(token.image)){
+        gui.jTextArea1.append("Identifier already declared \n");
+      }else {
+        VT++;
+        VP++;
+        simbolsTable.put(token.image, new Auxst(tipo, VT) );
+
+      }
+    } else if (Objects.equals(context, "data entry")) {
+      if ( simbolsTable.containsKey(token.image)){
+        Auxst aux = (Auxst) simbolsTable.get(token.image);
+        if ( aux.getCategory() == 1  || aux.getCategory() == 2  || aux.getCategory() == 3  || aux.getCategory() == 4 ) {
+          InstructionArea instruction = new InstructionArea("REA" , String.valueOf(aux.getCategory()));
+          instructionArea.put(pointer, instruction);
+          pointer++;
+          InstructionArea instruction2 = new InstructionArea("STR" , String.valueOf(aux.getAttribute()));
+          instructionArea.put(pointer, instruction2);
+          pointer++;
+        } else{
+          gui.jTextArea1.append("Program or Constant Identifier");
+        }
+      }else {
+        System.out.println("Identifier not declared");
+      }
+    }
+
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void twelve (CompiladorGui gui): {
+    if(simbolsTable.containsKey(token.image)){
+      Auxst aux = (Auxst) simbolsTable.get(token.image);
+      if ( aux.getCategory() == 1  || aux.getCategory() == 2  || aux.getCategory() == 3  || aux.getCategory() == 4 ) {
+        InstructionArea instruction2 = new InstructionArea("STR" , String.valueOf(aux.getAttribute()));
+        instructionArea.put(pointer, instruction2);
+        pointer++;
+      } else{
+        gui.jTextArea1.append("Program or Constant Identifier");
+      }
+    }else {
+      gui.jTextArea1.append("Identifier not declared");
+    }
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void thirteen (CompiladorGui gui): {
+    context = "data entry";
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void fourteen (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("WRT", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void fifteen (CompiladorGui gui): {
+    if(simbolsTable.containsKey(token.image)){
+      Auxst aux = (Auxst) simbolsTable.get(token.image);
+      if ( aux.getCategory() == 1  || aux.getCategory() == 2  || aux.getCategory() == 3  || aux.getCategory() == 4 || aux.getCategory() == 5 || aux.getCategory() == 6 ||  aux.getCategory() == 7 ) {
+        InstructionArea instruction2 = new InstructionArea("LDV" , String.valueOf(aux.getAttribute()));
+        instructionArea.put(pointer, instruction2);
+        pointer++;
+      } else{
+        gui.jTextArea1.append("Program or Constant Identifier");
+      }
+    }else {
+      gui.jTextArea1.append("Identifier not declared");
+    }
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void sixteen (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("LDI", token.image);
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void seventeen (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("LDR", token.image);
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void eighteen (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("LDS", token.image);
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void nineteen (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("LDB", "true");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void twenty (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("LDB", "false");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void twentyone (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("JMF", "0");
+    instructionArea.put(pointer, instruction);
+    pilha.add(pointer);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+
+  }
+  private void twentytwo (CompiladorGui gui): {
+    Integer aux = (Integer) pilha.pop();
+    InstructionArea i = (InstructionArea) instructionArea.get(aux);
+    i.setParameter(String.valueOf(pointer));
+    instructionArea.replace(aux, i);
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void twentythree (CompiladorGui gui): {
+    Integer aux = (Integer) pilha.pop();
+    InstructionArea i = (InstructionArea) instructionArea.get(aux);
+    i.setParameter(String.valueOf(pointer));
+    instructionArea.replace(aux, i);
+    InstructionArea instruction = new InstructionArea("JMP", "0");
+    instructionArea.put(pointer, instruction);
+    pilha.add(pointer);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void twentyfour (CompiladorGui gui): {
+    pilha.add(pointer);
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void twentyfive (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea( "JMF", "0");
+    instructionArea.put(pointer, instruction);
+    pilha.add(pointer);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void twentysix (CompiladorGui gui): {
+    Integer aux = (Integer) pilha.pop();
+    InstructionArea i = (InstructionArea) instructionArea.get(aux);
+    i.setParameter(String.valueOf(pointer+1));
+    instructionArea.replace(aux, i);
+    Integer aux2 = (Integer) pilha.pop();
+    InstructionArea instruction = new InstructionArea("JMP", String.valueOf(aux2));
+    instructionArea.put(pointer, instruction);
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void twentyseven (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("EQL", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void twentyeight (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("DIF", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void twentynine (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("SMR", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void thirty (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("BGR", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void thirtyone (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("SME", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void thirtytwo (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("BGE", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void thirtythree (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("ADD", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void thirtyfour (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("SUB", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void thirtyfive (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("OR", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void thirtysix (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("MUL", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void thirtyseven (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("DIV", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void thirtyeight (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("IDIV", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void thirtynine (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("MOD", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void fourty (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("AND", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void fourtyone (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("POW", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
+  private void fourtytwo (CompiladorGui gui): {
+    InstructionArea instruction = new InstructionArea("NOT", "0");
+    instructionArea.put(pointer, instruction);
+    pointer++;
+  }
+  {
+    [<INVALID_LEXICAL>]
+  }
